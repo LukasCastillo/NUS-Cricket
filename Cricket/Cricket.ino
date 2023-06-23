@@ -22,7 +22,7 @@ void setup() {
 
   oled.setFont(Adafruit5x7);
   oled.clear();
-  oled.println("Range + OLED");
+  oled.println("Mode: 0");
 
   pinMode(LDR_PIN, INPUT);
   pinMode(SPK_OUT, OUTPUT);
@@ -33,30 +33,67 @@ void setup() {
   pinMode(MotorB_1, OUTPUT);
   pinMode(MotorB_2, OUTPUT);
 
+  attachInterrupt(IR_RECV, irISR, FALLING);
+  pinMode(IR_RECV, INPUT);
+
   randomSeed(analogRead(0));
 }
 
-int mode = 0;
+int mode = 1;
 
 bool invertTurn = false;
 
 int lightValue;
 int turnTimer = 0;
 
-unsigned short colors[][3] = {{0, 0, 200}, {0, 0, 180}, {0, 0, 120}, {0, 0, 80}, {0, 0, 20}};
+//unsigned short colors[][3] = {{0, 0, 200}, {0, 0, 180}, {0, 0, 120}, {0, 0, 80}, {0, 0, 20}};
+unsigned short colors[][3] = {{200, 0, 200}, {180, 0, 180}, {120, 0, 120}, {80, 0, 80}, {20, 0, 20}};
+// unsigned short colors[][3] = {{200, 0, 0}, {180, 0, 0}, {120, 0, 0}, {80, 0, 0}, {20, 0, 0}};
+//unsigned short colors[][3] = {{0, 200, 0}, {0, 180, 0}, {0, 120, 0}, {0, 80, 0}, {0, 20, 0}};
 const short colLength = 5;
+
+char direction = 's';
+char pDirection = 's';
+
 void loop() {
   // put your main code here, to run repeatedly:
   lightValue = analogRead(LDR_PIN);
 
-  if(lightValue < 900){
-    mode = 2;
-  }else{
-    mode = 1;
+  if(nec_ok) {                                     // If a good NEC message is received
+    nec_ok = false;                             // Reset decoding process
+
+    oled.clear();
+    Serial.println("NEC IR Received:");
+    
+    Serial.print("Addr: ");
+    address = nec_code >> 16;
+    command = (nec_code & 0xFFFF) >> 8;         // Remove inverted Bits
+    sprintf(text, "%04X", address);
+    Serial.println(text);                          // Display address in hex format
+
+    command = decodeIr(command);
+
+    if('0' <= command && '9' >= command){
+      mode = command - '0';
+      oled.clear();
+      oled.print("Mode: ");
+      oled.print(mode);
+      motorMoveControl(0, 1, 0);
+      motorMoveControl(1, 1, 0);
+    }else{
+      direction = command;
+    }
+  } 
+
+  if(mode != 0 && mode != 2){
+    if(lightValue < 900){
+      mode = 3;
+    }else{
+      mode = 1;
+    }
   }
 
   Serial.println(lightValue);
-
 
   if(mode == 1){
     int distance = ping_mm();
@@ -79,7 +116,7 @@ void loop() {
       motorMoveControl(1, 1, 50);
     }
   
-  }else if(mode == 2){
+  }else if(mode == 3 || mode == 2){
     motorMoveControl(0, 0, 0);
     motorMoveControl(1, 0, 0);
     
@@ -92,14 +129,14 @@ void loop() {
     if(millis() - 200 > turnTimer && random(50) % 50 == 0){
       motorMoveControl(0, invertTurn ? 1 : 0, 10);
       motorMoveControl(1, invertTurn ? 0 : 1, 10);
-      playTone(NOTE_G7, 10);
-      playTone(NOTE_G6, 10);
-      playTone(NOTE_G7, 10);
-      playTone(NOTE_G4, 10);
-      playTone(NOTE_G7, 10);
-      playTone(NOTE_G6, 10);
-      playTone(NOTE_G7, 10);
-      playTone(NOTE_G4, 10);
+      playTone(NOTE_A7, 10);
+      playTone(NOTE_A6, 10);
+      playTone(NOTE_A7, 10);
+      playTone(NOTE_A4, 10);
+      playTone(NOTE_A7, 10);
+      playTone(NOTE_A6, 10);
+      playTone(NOTE_A7, 10);
+      playTone(NOTE_A4, 10);
       playTone(NOTE_A4, 20);
       noTone(SPK_OUT);
       delay(random(10, 30));
@@ -115,6 +152,29 @@ void loop() {
       turnTimer = millis();
     }else{
       invertTurn = random(2) % 2 == 0;
+    }
+  }else if(mode == 0){
+    switch(direction){
+      case 'o':
+        motorMoveControl(0, 1, 0);
+        motorMoveControl(1, 1, 0);
+        break;
+      case 'u':
+        motorMoveControl(0, 1, 20 + 10*2);
+        motorMoveControl(1, 1, 20 + 10*2);
+        break;
+      case 'r':
+        motorMoveControl(0, 0, 20 + 10*2);
+        motorMoveControl(1, 1, 20 + 10*2);
+        break;
+      case 'l':
+        motorMoveControl(0, 1, 20 + 10*2);
+        motorMoveControl(1, 0, 20 + 10*2);
+        break;
+      case 'd':
+        motorMoveControl(0, 0, 20 + 10*2);
+        motorMoveControl(1, 0, 20 + 10*2);
+        break;
     }
   }
 
